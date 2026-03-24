@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>九九乘法大冒險</title>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 React 與 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 引入 Babel 用來解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        @keyframes blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .animate-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes popOut {
+          0% { transform: scale(0.2) translateY(50px) rotate(-20deg); opacity: 0; }
+          40% { transform: scale(1.2) translateY(-10px) rotate(-5deg); opacity: 1; }
+          80% { transform: scale(1.1) translateY(0px) rotate(-10deg); opacity: 1; }
+          100% { transform: scale(1) translateY(0px) rotate(-10deg); opacity: 0; }
+        }
+        .animate-popOut { animation: popOut 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        /* 隱藏捲軸與防止反白 */
+        body { margin: 0; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+    </style>
+</head>
+<body class="bg-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // --- 內建圖示 (取代原本的 lucide-react 以便單檔執行) ---
+        const Play = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
+        const RotateCcw = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>;
+        const Trophy = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7c0 3.31 2.69 6 6 6s6-2.69 6-6V2z"></path></svg>;
+        const Zap = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>;
+        const Clock = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
+        const Star = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>;
+        const Flame = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>;
+        const Sparkles = ({ className }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path><path d="M5 3v4"></path><path d="M19 17v4"></path><path d="M3 5h4"></path><path d="M17 19h4"></path></svg>;
+
+        // --- 音效引擎 (Web Audio API) ---
+        let audioCtx = null;
+        const playSound = (type) => {
+          try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'correct') {
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(600, t);
+              osc.frequency.exponentialRampToValueAtTime(1200, t + 0.1);
+              gain.gain.setValueAtTime(0.1, t);
+              gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+              osc.start(t);
+              osc.stop(t + 0.1);
+            } else if (type === 'wrong') {
+              osc.type = 'sawtooth';
+              osc.frequency.setValueAtTime(150, t);
+              osc.frequency.exponentialRampToValueAtTime(100, t + 0.3);
+              gain.gain.setValueAtTime(0.1, t);
+              gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+              osc.start(t);
+              osc.stop(t + 0.3);
+            } else if (type === 'tick') {
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(400, t);
+              gain.gain.setValueAtTime(0.02, t);
+              gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+              osc.start(t);
+              osc.stop(t + 0.05);
+            } else if (type === 'urgentTick') {
+              osc.type = 'square';
+              osc.frequency.setValueAtTime(800, t);
+              gain.gain.setValueAtTime(0.05, t);
+              gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+              osc.start(t);
+              osc.stop(t + 0.05);
+            } else if (type === 'milestone') {
+              osc.type = 'square';
+              osc.frequency.setValueAtTime(400, t);
+              osc.frequency.setValueAtTime(600, t + 0.1);
+              osc.frequency.setValueAtTime(800, t + 0.2);
+              gain.gain.setValueAtTime(0.1, t);
+              gain.gain.linearRampToValueAtTime(0.01, t + 0.4);
+              osc.start(t);
+              osc.stop(t + 0.4);
+            }
+          } catch (e) { console.log('Audio error:', e); }
+        };
+
+        // --- 遊戲設定與資源 ---
+        const GAME_DURATION = 60;
+        const MONSTER_EMOJIS = ['👾', '👽', '👻', '🐲', '🐙', '🦇', '🦖', '🤖', '🎃', '🤡'];
+
+        const generateProblem = () => {
+          const num1 = Math.floor(Math.random() * 8) + 2;
+          const num2 = Math.floor(Math.random() * 8) + 2;
+          const correctAnswer = num1 * num2;
+
+          let optionsSet = new Set([correctAnswer]);
+          
+          while (optionsSet.size < 4) {
+            const errorType = Math.floor(Math.random() * 4);
+            let fakeAnswer = 0;
+            
+            switch (errorType) {
+              case 0: fakeAnswer = num1 * (num2 + (Math.random() > 0.5 ? 1 : -1)); break;
+              case 1: fakeAnswer = (num1 + (Math.random() > 0.5 ? 1 : -1)) * num2; break;
+              case 2: fakeAnswer = correctAnswer + (Math.random() > 0.5 ? 10 : -10); break;
+              case 3: 
+                if (correctAnswer > 9) {
+                  const strAns = correctAnswer.toString();
+                  fakeAnswer = parseInt(strAns[1] + strAns[0]);
+                } else {
+                  fakeAnswer = correctAnswer + 2;
+                }
+                break;
+              default: fakeAnswer = correctAnswer + 1;
+            }
+
+            if (fakeAnswer > 0 && fakeAnswer !== correctAnswer) {
+              optionsSet.add(fakeAnswer);
+            }
+          }
+
+          const options = Array.from(optionsSet).sort(() => Math.random() - 0.5);
+          return { num1, num2, correctAnswer, options };
+        };
+
+        function App() {
+          const [gameState, setGameState] = useState('start');
+          const [score, setScore] = useState(0);
+          const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
+          const [combo, setCombo] = useState(0);
+          const [maxCombo, setMaxCombo] = useState(0);
+          const [problem, setProblem] = useState({ num1: 2, num2: 2, correctAnswer: 4, options: [2, 4, 6, 8] });
+          const [monster, setMonster] = useState('👾');
+          const [feedback, setFeedback] = useState(null);
+          const [milestoneMsg, setMilestoneMsg] = useState(null);
+          const gameAreaRef = useRef(null);
+
+          const startGame = () => {
+            playSound('tick');
+            setScore(0);
+            setTimeLeft(GAME_DURATION);
+            setCombo(0);
+            setMaxCombo(0);
+            setGameState('playing');
+            nextProblem();
+          };
+
+          const nextProblem = useCallback(() => {
+            setProblem(generateProblem());
+            setMonster(MONSTER_EMOJIS[Math.floor(Math.random() * MONSTER_EMOJIS.length)]);
+            setFeedback(null);
+          }, []);
+
+          const handleAnswer = (selectedAnswer) => {
+            if (gameState !== 'playing' || feedback !== null) return;
+
+            if (selectedAnswer === problem.correctAnswer) {
+              playSound('correct');
+              setFeedback('correct');
+              const newCombo = combo + 1;
+              setCombo(newCombo);
+              setMaxCombo(Math.max(maxCombo, newCombo));
+              
+              if (newCombo % 5 === 0 && newCombo > 0) {
+                playSound('milestone');
+                const msgs = { 5: "連擊開始！", 10: "火力全開！", 15: "無人能擋！", 20: "數學之神！" };
+                setMilestoneMsg(msgs[newCombo] || "超狂連擊！");
+                setTimeout(() => setMilestoneMsg(null), 1500);
+              }
+
+              const points = 10 + Math.min(newCombo * 2, 40);
+              setScore(s => s + points);
+
+            } else {
+              playSound('wrong');
+              setFeedback('wrong');
+              setCombo(0);
+              
+              if (gameAreaRef.current) {
+                gameAreaRef.current.classList.add('animate-shake');
+                setTimeout(() => {
+                  if (gameAreaRef.current) gameAreaRef.current.classList.remove('animate-shake');
+                }, 500);
+              }
+            }
+
+            setTimeout(() => {
+              nextProblem();
+            }, 400);
+          };
+
+          useEffect(() => {
+            let timer;
+            if (gameState === 'playing' && timeLeft > 0) {
+              timer = setInterval(() => {
+                setTimeLeft((prev) => prev - 1);
+              }, 1000);
+            } else if (timeLeft === 0 && gameState === 'playing') {
+              setGameState('gameover');
+              playSound('wrong');
+            }
+            return () => clearInterval(timer);
+          }, [gameState, timeLeft]);
+
+          useEffect(() => {
+            if (gameState === 'playing' && timeLeft > 0 && timeLeft < GAME_DURATION) {
+              if (timeLeft <= 10) {
+                playSound('urgentTick');
+              } else {
+                playSound('tick');
+              }
+            }
+          }, [timeLeft, gameState]);
+
+          return (
+            <div className="min-h-[100dvh] bg-slate-900 flex items-center justify-center sm:p-4 font-sans select-none touch-manipulation">
+              <div className="w-full h-[100dvh] sm:h-[800px] max-w-md bg-slate-800 sm:rounded-3xl shadow-2xl overflow-hidden sm:border border-slate-700 relative flex flex-col">
+                
+                {/* 背景裝飾 */}
+                <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
+                  <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl animate-blob"></div>
+                  <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000"></div>
+                  <div className="absolute bottom-[-20%] left-[20%] w-64 h-64 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000"></div>
+                </div>
+
+                <div className="relative z-10 flex-1 flex flex-col h-full overflow-y-auto">
+                  
+                  {/* === START SCREEN === */}
+                  {gameState === 'start' && (
+                    <div className="p-6 sm:p-8 text-center flex-1 flex flex-col items-center justify-center h-full">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-purple-500/30 shrink-0">
+                        <Zap className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
+                      </div>
+                      <h1 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-pink-400 mb-2">
+                        九九乘法大冒險
+                      </h1>
+                      <p className="text-sm sm:text-base text-slate-400 mb-6">60秒星際討伐戰！你能擊敗多少怪獸？</p>
+                      
+                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 w-full mb-8 text-left shrink-0">
+                        <h3 className="text-slate-300 font-bold mb-2 flex items-center"><Star className="w-4 h-4 mr-2 text-yellow-400"/> 遊戲規則</h3>
+                        <ul className="text-xs sm:text-sm text-slate-400 space-y-2">
+                          <li>• 選擇正確的乘法答案來擊敗怪獸。</li>
+                          <li>• 連續答對可獲得 <span className="text-orange-400 font-bold">Combo 加成</span> 分數！</li>
+                          <li>• 答錯不會扣分，但 Combo 會重新計算。</li>
+                        </ul>
+                      </div>
+
+                      <button 
+                        onClick={startGame}
+                        className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold text-lg sm:text-xl transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-indigo-500/25 flex items-center justify-center shrink-0 mt-auto sm:mt-0"
+                      >
+                        <Play className="w-6 h-6 mr-2 fill-current" /> 開始挑戰
+                      </button>
+                    </div>
+                  )}
+
+                  {/* === PLAYING SCREEN === */}
+                  {gameState === 'playing' && (
+                    <div className="flex flex-col flex-1 h-full" ref={gameAreaRef}>
+                      <div className="flex justify-between items-center p-4 sm:p-6 bg-slate-900/50 border-b border-slate-700/50 shrink-0">
+                        <div className="flex items-center space-x-2">
+                          <div className="bg-slate-800 p-2 sm:px-3 rounded-lg border border-slate-700 flex items-center">
+                            <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 mr-2" />
+                            <span className="text-white font-mono font-bold text-lg sm:text-xl">{score}</span>
+                          </div>
+                        </div>
+                        
+                        <div className={`flex items-center space-x-2 font-mono text-xl sm:text-2xl font-black ${timeLeft <= 10 ? 'text-red-400 animate-pulse' : 'text-slate-200'}`}>
+                          <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
+                          <span>{timeLeft}s</span>
+                        </div>
+                      </div>
+
+                      <div className="h-10 sm:h-12 flex justify-center items-center mt-2 shrink-0">
+                        {combo > 1 && (
+                          <div className="flex items-center space-x-1 animate-bounce">
+                            <Flame className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
+                            <span className="text-orange-400 font-black text-lg sm:text-xl italic">{combo} COMBO!</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 flex flex-col items-center justify-center relative min-h-[200px]">
+                        {milestoneMsg && (
+                          <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
+                            <div className="animate-popOut text-5xl sm:text-6xl font-black text-yellow-300 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] rotate-[-10deg] flex flex-col items-center">
+                              <Sparkles className="w-12 h-12 text-yellow-400 mb-2" />
+                              {milestoneMsg}
+                            </div>
+                          </div>
+                        )}
+
+                        {feedback === 'correct' && <div className="absolute inset-0 bg-green-500/20 z-0 animate-ping rounded-full"></div>}
+                        {feedback === 'wrong' && <div className="absolute inset-0 bg-red-500/20 z-0 animate-ping rounded-full"></div>}
+
+                        <div className={`text-7xl sm:text-8xl mb-4 sm:mb-6 z-10 transition-transform duration-300 ${feedback === 'correct' ? 'scale-0 opacity-0' : 'scale-100 opacity-100'} ${feedback === null ? 'animate-bounce' : ''}`}>
+                          {monster}
+                        </div>
+
+                        <div className="bg-white/10 backdrop-blur-md border border-white/20 px-6 py-3 sm:px-8 sm:py-4 rounded-3xl shadow-xl z-10">
+                          <h2 className="text-5xl sm:text-6xl font-black text-white tracking-widest font-mono">
+                            {problem.num1} <span className="text-pink-400 mx-1 sm:mx-2">×</span> {problem.num2}
+                          </h2>
+                        </div>
+                      </div>
+
+                      <div className="p-4 sm:p-6 grid grid-cols-2 gap-3 sm:gap-4 pb-8 sm:pb-8 mt-auto shrink-0">
+                        {problem.options.map((option, index) => {
+                          let buttonColor = "bg-slate-700 hover:bg-slate-600 text-white border-slate-600";
+                          if (feedback) {
+                            if (option === problem.correctAnswer) {
+                              buttonColor = "bg-green-500 text-white border-green-400 scale-105";
+                            } else if (feedback === 'wrong') {
+                              buttonColor = "bg-red-500/50 text-slate-300 border-red-500/50 opacity-50";
+                            } else {
+                              buttonColor = "bg-slate-800 text-slate-500 border-slate-700 opacity-50";
+                            }
+                          }
+
+                          return (
+                            <button
+                              key={index}
+                              onClick={() => handleAnswer(option)}
+                              disabled={feedback !== null}
+                              className={`h-20 sm:h-20 rounded-2xl text-4xl sm:text-4xl font-black font-mono border-b-4 transition-all duration-200 active:border-b-0 active:translate-y-1 ${buttonColor}`}
+                            >
+                              {option}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* === GAME OVER SCREEN === */}
+                  {gameState === 'gameover' && (
+                    <div className="p-6 sm:p-8 text-center flex-1 flex flex-col items-center justify-center h-full">
+                      <div className="text-5xl sm:text-6xl mb-4">🏆</div>
+                      <h2 className="text-3xl font-black text-white mb-2">時間到！</h2>
+                      <p className="text-sm sm:text-base text-slate-400 mb-8">討伐任務結束，來看看你的戰績</p>
+                      
+                      <div className="w-full bg-slate-800/80 rounded-2xl p-5 sm:p-6 border border-slate-700 mb-8 space-y-4 shrink-0">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold text-base sm:text-lg">總積分</span>
+                          <span className="text-3xl sm:text-4xl font-black text-yellow-400 font-mono">{score}</span>
+                        </div>
+                        <div className="h-px w-full bg-slate-700"></div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold text-base sm:text-lg">最高連擊 (Max Combo)</span>
+                          <span className="text-2xl font-black text-orange-400 font-mono">{maxCombo}</span>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={startGame}
+                        className="w-full py-4 rounded-xl bg-slate-100 hover:bg-white text-slate-900 font-bold text-lg sm:text-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center mt-auto sm:mt-0 shrink-0"
+                      >
+                        <RotateCcw className="w-6 h-6 mr-2" /> 再玩一次
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 啟動 React 應用
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
